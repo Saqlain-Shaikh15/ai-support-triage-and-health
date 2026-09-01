@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Support AI — Triage &amp; Health</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+  <!-- ============================================================
+       SIDEBAR
+       Persistent left navigation strip.
+  ============================================================ -->
+  <aside class="sidebar">
+
+    <div class="sidebar-brand">
+      <span class="brand-icon">◈</span>
+      <span class="brand-name">Support<br>AI</span>
+    </div>
+
+    <nav class="sidebar-nav">
+
+      <!-- Tab 1: Ticket Triage -->
+      <button
+        class="nav-btn active"
+        id="nav-triage"
+        onclick="switchTab('triage')"
+        aria-current="page"
+      >
+        <span class="nav-icon">
+          <!-- inbox / triage icon -->
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="2" y="4" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M2 8h16" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M6 12h4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Ticket Triage</span>
+      </button>
+
+      <!-- Tab 2: TAM Health Brief -->
+      <button
+        class="nav-btn"
+        id="nav-brief"
+        onclick="switchTab('brief')"
+      >
+        <span class="nav-icon">
+          <!-- account health icon -->
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="7.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M6 10.5l2.5 2.5L14 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        <span class="nav-label">Account Health</span>
+      </button>
+
+    </nav>
+
+    <div class="sidebar-footer">
+      <span class="footer-dot"></span>
+      <span class="footer-label">LLM ready</span>
+    </div>
+
+  </aside>
+
+
+  <!-- ============================================================
+       MAIN CONTENT AREA
+  ============================================================ -->
+  <main class="main">
+
+    <!-- --------------------------------------------------------
+         TAB: TICKET TRIAGE
+    -------------------------------------------------------- -->
+    <section class="tab-panel active" id="panel-triage">
+
+      <header class="panel-header">
+        <div>
+          <h1 class="panel-title">Ticket Triage</h1>
+          <p class="panel-subtitle">
+            Paste a raw support ticket — the system retrieves historical
+            examples and KB documentation, then classifies urgency, product
+            area, and drafts a first response.
+          </p>
+        </div>
+        <button class="clear-btn" onclick="clearTriage()">Clear</button>
+      </header>
+
+      <!-- Chat / result history -->
+      <div class="chat-log" id="triage-log" aria-live="polite"></div>
+
+      <!-- Input form -->
+      <div class="input-bar">
+        <textarea
+          id="triage-input"
+          class="ticket-textarea"
+          rows="4"
+          placeholder="Paste the customer's ticket here…"
+          aria-label="Ticket text"
+        ></textarea>
+        <button
+          class="submit-btn"
+          id="triage-submit"
+          onclick="submitTriage()"
+        >
+          Analyse ticket
+          <svg class="btn-arrow" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+    </section>
+
+
+    <!-- --------------------------------------------------------
+         TAB: ACCOUNT HEALTH BRIEF
+    -------------------------------------------------------- -->
+    <section class="tab-panel" id="panel-brief">
+
+      <header class="panel-header">
+        <div>
+          <h1 class="panel-title">Account Health Brief</h1>
+          <p class="panel-subtitle">
+            Enter an account ID to generate a TAM-ready brief: executive
+            summary, open risks, and recommended talking points — grounded
+            entirely in the last 90 days of ticket data.
+          </p>
+        </div>
+        <button class="clear-btn" onclick="clearBrief()">Clear</button>
+      </header>
+
+      <!-- Account summary card (shown after a successful lookup) -->
+      <div class="account-card hidden" id="account-card">
+        <div class="account-card-inner" id="account-card-inner"></div>
+      </div>
+
+      <!-- Result log -->
+      <div class="chat-log" id="brief-log" aria-live="polite"></div>
+
+      <!-- Input form -->
+      <div class="input-bar input-bar--row">
+        <input
+          id="brief-input"
+          class="account-input"
+          type="text"
+          placeholder="Account ID — e.g. ACC-1899"
+          aria-label="Account ID"
+          onkeydown="if(event.key==='Enter') submitBrief()"
+        />
+        <button
+          class="submit-btn"
+          id="brief-submit"
+          onclick="submitBrief()"
+        >
+          Generate brief
+          <svg class="btn-arrow" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+chroma_db/
+venv/
+env/
+
+# VSCode / IDE configs
+.vscode/
+.idea/
+
+# Environment variables (API keys)
+.env
+apis.env
+
+# Chrome vector database
+chrome_langchain_db/
+
+# OS files
+.DS_Store
+Thumbs.db
