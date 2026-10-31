@@ -1,10 +1,3 @@
-# US Delivery Internship — Starter Dataset
-
-This repository contains the mock dataset for the **US Delivery Internship Technical Task Round**.  
-Candidates should use this data exclusively for their submissions.
-
----
-
 ## Repository Structure
 
 ```

@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -6,25 +7,24 @@ from pathlib import Path
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from KB_RAG import kb_retriever
+from prompts import BRIEF_PROMPT
 
-
-# ============================================================
-# CONFIGURATION
-# ============================================================
 
 # Soft-coded reference date.
 # Format: DDMMYYYY
-DATE = "14082026"
+DATE = "14082026" 
 
 ACCOUNTS_FILE = Path("data/accounts.json")
 TICKETS_FILE = Path("data/tickets.json")
 
-# ============================================================
-# DATE HELPERS
-# ============================================================
 
+# DATE HELPERS
 def parse_reference_date(date_string):
+    """Convert a DDMMYYYY reference date to the end of that day.
+
+    Setting the time to the end of the day allows tickets created on the
+    reference date to be included in the reporting window.
+    """
     return datetime.strptime(date_string, "%d%m%Y").replace(
         hour=23,
         minute=59,
@@ -34,43 +34,50 @@ def parse_reference_date(date_string):
 
 
 def parse_ticket_date(date_string):
+    """Convert an ISO-formatted ticket timestamp into a datetime.
+
+    The trailing Z is converted to an explicit UTC offset before parsing.
+    The timezone information is then removed for comparison with the
+    reference date used by this script.
+    """
     return datetime.fromisoformat(
         date_string.replace("Z", "+00:00")
     ).replace(tzinfo=None)
-
 
 REFERENCE_DATE = parse_reference_date(DATE)
 CUTOFF_DATE = REFERENCE_DATE - timedelta(days=90)
 
 
-# ============================================================
 # DATA LOADING
-# ============================================================
-
 def load_json(path):
+    """Read a JSON file and return its parsed Python data."""
     with open(path, "r", encoding="utf-8") as file:
         return json.load(file)
 
 
-# ============================================================
 # ACCOUNT LOOKUP
-# ============================================================
-
 def get_account(accounts, account_id):
+    """Find and return the account matching account_id.
+
+    Raises:
+        ValueError: If no account with the requested ID exists.
+    """
     for account in accounts:
         if account.get("account_id") == account_id:
             return account
 
     raise ValueError(
-        f"Account '{account_id}' was not found in accounts.json."
+        f"Account '{account_id}' was not found, pleas enter a valid account id"
     )
 
 
-# ============================================================
 # TICKET FILTERING
-# ============================================================
-
 def get_recent_tickets(tickets, account_id):
+    """Return this account's tickets from the configured 90-day window.
+
+    Results are sorted by creation timestamp and ticket ID so that the
+    same input produces a consistent processing order.
+    """
     relevant_tickets = []
 
     for ticket in tickets:
@@ -93,10 +100,7 @@ def get_recent_tickets(tickets, account_id):
     return relevant_tickets
 
 
-# ============================================================
 # RISK DETECTION
-# ============================================================
-
 CHURN_SIGNALS = [
     "competitor",
     "competing vendor",
@@ -132,6 +136,10 @@ ESCALATION_SIGNALS = [
 
 
 def find_matching_signals(text, signals):
+    """Return configured signal phrases found in the supplied text.
+
+    Matching is case-insensitive and uses simple substring checks.
+    """
     text_lower = text.lower()
 
     return [
@@ -160,6 +168,11 @@ def extract_sentence_with_signal(body, signal):
 
 
 def detect_ticket_risks(tickets):
+    """Flag tickets containing configured churn or escalation phrases.
+
+    Each flag includes the matching trigger and a quote extracted from the
+    original ticket body to support the reason for flagging it.
+    """
     flagged_tickets = []
 
     for ticket in tickets:
@@ -210,11 +223,13 @@ def detect_ticket_risks(tickets):
     return flagged_tickets
 
 
-# ============================================================
 # ACCOUNT-LEVEL RISK DETECTION
-# ============================================================
-
 def detect_account_risks(account):
+    """Collect account-level risk indicators from structured account fields.
+
+    These checks use the account dataset's recorded status, ticket counts,
+    login activity, renewal date, and escalation notes.
+    """
     risks = []
 
     if account.get("health_status", "").lower() == "at risk":
@@ -260,12 +275,13 @@ def detect_account_risks(account):
 
     return risks
 
-
-# ============================================================
 # FACT PACKET
-# ============================================================
-
 def build_fact_packet(account, recent_tickets, flagged_tickets):
+    """Combine account details, recent ticket metadata, and detected risks.
+
+    The fact packet is the structured input sent to the LLM, keeping data
+    preparation and rule-based risk detection separate from summarisation.
+    """
     account_risks = detect_account_risks(account)
 
     return {
@@ -324,14 +340,16 @@ def build_fact_packet(account, recent_tickets, flagged_tickets):
     }
 
 
-# ============================================================
 # LLM SYNTHESIS
-# ============================================================
-
 def create_model():
+    """Load environment variables and configure the Groq chat model.
+
+    Raises:
+        RuntimeError: If GROQ_API_KEY is not available in the environment.
+    """
     load_dotenv()
 
-    api_key = __import__("os").getenv("GROQ_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
 
     if not api_key:
         raise RuntimeError(
@@ -340,47 +358,21 @@ def create_model():
         )
 
     return ChatGroq(
-        model="llama-3.3-70b-versatile",
+        model="openai/gpt-oss-120b",
         api_key=api_key,
         temperature=0,
     )
 
 
 def generate_brief(fact_packet):
+    """Generate the three-section TAM brief from a prepared fact packet.
+
+    The prompt restricts the model to the supplied facts and requires it
+    to preserve the exact quotes for tickets flagged by the Python rules.
+    """
     model = create_model()
 
-    template = """
-You are a TAM account-health summarisation assistant.
-
-Your job is to turn the supplied FACT PACKET into a concise,
-actionable account brief.
-
-IMPORTANT RULES:
-
-1. Use ONLY information contained in the FACT PACKET.
-2. Do not invent facts, numbers, customer statements, teams,
-   dates, products, or recommendations presented as facts.
-3. The Python application has already identified risk signals.
-   Do not create additional churn or escalation flags.
-4. Every flagged ticket MUST include the exact quote supplied
-   in the FACT PACKET.
-5. Do not modify, paraphrase, or fabricate ticket quotes.
-6. Keep the executive summary to exactly 3-5 sentences.
-7. Produce exactly these three sections:
-   1. Executive Summary
-   2. Open Risks & Flagged Issues
-   3. Recommended Talking Points for the TAM
-8. Be concise and actionable.
-9. Distinguish account-level risks from ticket-level signals.
-10. If information is not available, do not guess.
-
-FACT PACKET:
-
-{fact_packet}
-"""
-
-    prompt = ChatPromptTemplate.from_template(template)
-
+    prompt = BRIEF_PROMPT
     chain = prompt | model
 
     result = chain.invoke({
@@ -394,11 +386,13 @@ FACT PACKET:
     return result.content
 
 
-# ============================================================
 # MAIN
-# ============================================================
-
 def run(account_id):
+    """Run the complete account-health summarisation pipeline for one account.
+
+    Loads the mock datasets, selects recent tickets, detects risks, builds
+    the fact packet, generates the brief, and prints the result.
+    """
     accounts = load_json(ACCOUNTS_FILE)
     tickets = load_json(TICKETS_FILE)
 
